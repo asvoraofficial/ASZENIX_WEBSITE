@@ -1,1 +1,1 @@
-{"name":"asvora-project","private":true,"scripts":{"build":"npm --prefix frontend run build"}}
+{"name":"aszenix-project","private":true,"scripts":{"build":"npm --prefix frontend run build"}}

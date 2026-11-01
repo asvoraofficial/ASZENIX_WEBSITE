@@ -110,7 +110,7 @@ function demoData(): DemoData {
       changed = true
       return true
     })
-    if (data.admin?.name === 'TECHPRO Admin') {
+    if (data.admin?.name === 'TECHPRO Admin' || data.admin?.name === 'ASVORA Admin') {
       data.admin.name = 'ASZENIX Admin'
       changed = true
     }

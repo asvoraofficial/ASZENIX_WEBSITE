@@ -80,9 +80,9 @@ LOGIN_ATTEMPT_LIMIT = 5
 LOGIN_ATTEMPT_WINDOW_SECONDS = 15 * 60
 
 
-cors_origins_raw = E("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+cors_origins_raw = E("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,https://aszenix.vercel.app")
 
-cors_origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
+cors_origins = [origin.strip().rstrip("/") for origin in cors_origins_raw.split(",") if origin.strip()]
 
 
 
@@ -684,6 +684,12 @@ def migrate_legacy_content():
                 content[key] = CONTENT[key]
 
                 changed = True
+
+        if content.get("brand") == "ASVORA":
+
+            content["brand"] = "ASZENIX"
+
+            changed = True
 
     for admin in store["admins"]:
 

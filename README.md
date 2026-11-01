@@ -1,4 +1,4 @@
-# ASVORA Portfolio
+# ASZENIX Portfolio
 
 ## Backend
 
@@ -39,7 +39,7 @@ Enquiries and quote requests are saved in `backend/data.json` and appear in the 
 
 Visit analytics use `backend/analytics.sqlite3`, avoiding a full JSON rewrite on every page view. Existing visit records in `data.json` are migrated automatically the first time the backend starts with the new version. Back up the MongoDB database and SQLite database.
 
-The starter portfolio uses the ASVORA studio details provided, with no invented projects, client testimonials, performance metrics, or quote budgets. Add verified work and testimonials in the admin panel. Add a case-study URL to a project to make its “Read case study” link appear. Configure quote budgets in Admin > Quote Settings if you want to offer them. The public contact email is intentionally blank until you provide one; update it under Admin > Content when ready.
+The starter portfolio uses the ASZENIX studio details provided, with no invented projects, client testimonials, performance metrics, or quote budgets. Add verified work and testimonials in the admin panel. Add a case-study URL to a project to make its “Read case study” link appear. Configure quote budgets in Admin > Quote Settings if you want to offer them. The public contact email is intentionally blank until you provide one; update it under Admin > Content when ready.
 
 Manage portfolio projects under Admin > Works. Edit the public About copy and Contact heading/details separately under Admin > About and Admin > Contact.
 

@@ -22,7 +22,7 @@ class PortfolioPersistenceTests(unittest.TestCase):
         self.data_file = main.DATA_FILE
         self.analytics_file = main.ANALYTICS_FILE
         self.mongo_db = main.mongo_db
-        self.test_database_name = f"asvora_test_{main.uuid.uuid4().hex}"
+        self.test_database_name = f"aszenix_test_{main.uuid.uuid4().hex}"
         if main.is_mongo_available():
             main.mongo_db = main.mongo_client[self.test_database_name]
         self.store = dict(main.store)
