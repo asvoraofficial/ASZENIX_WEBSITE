@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import './index.css'
 const Public = lazy(() => import('./Public'))
 const Admin = lazy(() => import('./Admin'))
-const Page = ({ children }: any) => <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: .5 }}>{children}</motion.div>
+const Page = ({ children }: any) => <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: .2 }}>{children}</motion.div>
 function NotFound() {
   return <Page><main className="grid min-h-screen place-items-center px-5 text-center">
     <div>
@@ -23,6 +23,7 @@ function App() {
     <Route path="/" element={<Page><Public /></Page>} />
     <Route path="/services" element={<Page><Public /></Page>} />
     <Route path="/work" element={<Page><Public /></Page>} />
+    <Route path="/work/:projectId" element={<Page><Public /></Page>} />
     <Route path="*" element={<NotFound />} /></Routes></AnimatePresence>
   </Suspense>
 }

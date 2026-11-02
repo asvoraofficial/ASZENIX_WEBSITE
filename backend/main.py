@@ -3,6 +3,7 @@ import datetime as dt
 import asyncio
 
 import hashlib
+import io
 import logging
 import json
 import os
@@ -12,6 +13,7 @@ import smtplib
 import sqlite3
 
 import tempfile
+import zipfile
 
 import time
 import uuid
@@ -31,6 +33,9 @@ from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 
 from dotenv import load_dotenv
+import cloudinary
+import cloudinary.exceptions
+import cloudinary.uploader
 
 from jose import JWTError, jwt
 
@@ -201,6 +206,137 @@ def encode_json(value):
 
     raise TypeError(f"Cannot serialize {type(value).__name__} to persistent data.")
 
+
+def store_media_file(data: bytes, filename: str) -> dict:
+    extension = os.path.splitext(filename)[1].lower()
+    media_type, mime_type = UPLOAD_TYPES[extension]
+    resource_type = {"image": "image", "video": "video", "file": "raw"}[media_type]
+    if E("CLOUDINARY_URL", "").strip():
+        public_id = os.path.splitext(filename)[0]
+        if resource_type == "raw":
+            public_id = filename
+        result = cloudinary.uploader.upload(
+            io.BytesIO(data),
+            folder="aszenix",
+            public_id=public_id,
+            resource_type=resource_type,
+            overwrite=False,
+            unique_filename=False,
+            secure=True,
+        )
+        url = result.get("secure_url")
+        public_id = result.get("public_id")
+        if not isinstance(url, str) or not isinstance(public_id, str):
+            raise cloudinary.exceptions.Error("Cloudinary did not return an image URL and public ID.")
+        return {
+            "url": url,
+            "file": filename,
+            "storage": "cloudinary",
+            "public_id": result["public_id"],
+            "resource_type": resource_type,
+            "media_type": media_type,
+            "mime_type": mime_type,
+        }
+
+    with open(os.path.join(UPLOADS_DIR, filename), "wb") as image:
+        image.write(data)
+    return {
+        "url": f"/uploads/{filename}",
+        "file": filename,
+        "storage": "local",
+        "resource_type": resource_type,
+        "media_type": media_type,
+        "mime_type": mime_type,
+    }
+
+
+UPLOAD_TYPES = {
+    ".png": ("image", "image/png"),
+    ".jpg": ("image", "image/jpeg"),
+    ".jpeg": ("image", "image/jpeg"),
+    ".webp": ("image", "image/webp"),
+    ".svg": ("image", "image/svg+xml"),
+    ".gif": ("image", "image/gif"),
+    ".mp4": ("video", "video/mp4"),
+    ".webm": ("video", "video/webm"),
+    ".mov": ("video", "video/quicktime"),
+    ".pdf": ("file", "application/pdf"),
+    ".docx": ("file", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    ".xlsx": ("file", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    ".pptx": ("file", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+}
+MAX_MEDIA_UPLOAD_BYTES = 50 * 1024 * 1024
+
+
+def validate_media_upload(filename: str, data: bytes) -> tuple[str, str]:
+    extension = os.path.splitext(filename)[1].lower()
+    media = UPLOAD_TYPES.get(extension)
+    if not media:
+        raise HTTPException(400, "Supported files: PNG, JPG, WebP, SVG, GIF, MP4, WebM, MOV, PDF, DOCX, XLSX, PPTX.")
+    if len(data) > MAX_MEDIA_UPLOAD_BYTES:
+        raise HTTPException(400, "Max 50 MB")
+    if not data:
+        raise HTTPException(400, "The uploaded file is empty.")
+
+    media_type, _ = media
+    valid = True
+    if extension == ".png":
+        valid = data.startswith(b"\x89PNG\r\n\x1a\n")
+    elif extension in (".jpg", ".jpeg"):
+        valid = data.startswith(b"\xff\xd8\xff")
+    elif extension == ".webp":
+        valid = len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP"
+    elif extension == ".gif":
+        valid = data.startswith((b"GIF87a", b"GIF89a"))
+    elif extension == ".svg":
+        valid = b"<svg" in data[:4096].lower()
+    elif extension in (".mp4", ".mov"):
+        valid = len(data) >= 12 and data[4:8] == b"ftyp"
+    elif extension == ".webm":
+        valid = data.startswith(b"\x1a\x45\xdf\xa3")
+    elif extension == ".pdf":
+        valid = data.startswith(b"%PDF-")
+    elif extension in (".docx", ".xlsx", ".pptx"):
+        expected_member = {
+            ".docx": "word/document.xml",
+            ".xlsx": "xl/workbook.xml",
+            ".pptx": "ppt/presentation.xml",
+        }[extension]
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                valid = expected_member in archive.namelist()
+        except zipfile.BadZipFile:
+            valid = False
+
+    if not valid:
+        raise HTTPException(400, f"The file contents do not match the {extension} extension.")
+    return media_type, UPLOAD_TYPES[extension][1]
+
+
+def delete_media_file(row: dict) -> None:
+    if row.get("storage") == "cloudinary":
+        public_id = row.get("public_id")
+        if not isinstance(public_id, str) or not public_id:
+            raise RuntimeError("Cloudinary media record is missing its public ID.")
+        resource_type = row.get("resource_type", "image")
+        if resource_type not in ("image", "video", "raw"):
+            raise RuntimeError("Cloudinary media record has an invalid resource type.")
+        result = cloudinary.uploader.destroy(
+            public_id,
+            resource_type=resource_type,
+            invalidate=True,
+        )
+        if result.get("result") not in ("ok", "not found"):
+            raise RuntimeError("Cloudinary did not confirm image deletion.")
+        return
+
+    filename = row.get("file")
+    if isinstance(filename, str) and filename:
+        path = os.path.join(UPLOADS_DIR, os.path.basename(filename))
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
 
 
 def load_store():
@@ -1343,25 +1479,25 @@ async def set_content(b: dict, _=Depends(auth)):
 
 async def upload(file: UploadFile = File(...), _=Depends(auth)):
 
-    ext = os.path.splitext(file.filename or "")[1].lower()
+    filename = os.path.basename(file.filename or "")
+    data = await file.read(MAX_MEDIA_UPLOAD_BYTES + 1)
+    media_type, mime_type = validate_media_upload(filename, data)
 
-    if ext not in (".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"):
+    name = uuid.uuid4().hex + os.path.splitext(filename)[1].lower()
 
-        raise HTTPException(400, "Images only")
+    try:
+        stored = await asyncio.to_thread(store_media_file, data, name)
+    except cloudinary.exceptions.Error as error:
+        logger.exception("Could not upload image to Cloudinary: %s", error)
+        raise HTTPException(502, "Image storage is unavailable. Please try again.") from error
 
-    data = await file.read()
-
-    if len(data) > 5_000_000:
-
-        raise HTTPException(400, "Max 5MB")
-
-    name = uuid.uuid4().hex + ext
-
-    with open(os.path.join(UPLOADS_DIR, name), "wb") as image:
-
-        image.write(data)
-
-    row = insert("media", {"title": file.filename, "url": f"/uploads/{name}", "file": name, "created": now()})
+    row = insert("media", {
+        "title": filename,
+        "media_type": media_type,
+        "mime_type": mime_type,
+        **stored,
+        "created": now(),
+    })
 
     save_store()
 
@@ -1467,17 +1603,17 @@ async def delete(col: str, id: str, _=Depends(auth)):
 
     if row:
 
-        store[col].remove(row)
-
         if col == "media":
-
             try:
+                await asyncio.to_thread(delete_media_file, row)
+            except cloudinary.exceptions.Error as error:
+                logger.exception("Could not delete image from Cloudinary: %s", error)
+                raise HTTPException(502, "Image storage is unavailable. The media record was not deleted.") from error
+            except RuntimeError as error:
+                logger.error("Could not delete media record %s: %s", id, error)
+                raise HTTPException(502, "Image storage did not confirm deletion. The media record was not deleted.") from error
 
-                os.remove(os.path.join(UPLOADS_DIR, row["file"]))
-
-            except OSError:
-
-                pass
+        store[col].remove(row)
 
         save_store()
 

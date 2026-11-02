@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useSearchParams, useNavigate, useParams } from 'react-router-dom'
 import { motion, useScroll, useSpring, useTransform, AnimatePresence } from 'framer-motion'
 import { api, getCachedPublicData, invalidatePublicCache, media } from './api'
 import BrandLogo from './BrandLogo'
@@ -8,7 +8,7 @@ const rv = (i = 0) => ({
   initial: { opacity: 0, y: 35 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true, margin: '-60px' },
-  transition: { duration: 0.6, delay: i * 0.07, ease: [0.2, 0.7, 0.2, 1] },
+  transition: { duration: 0.3, delay: i * 0.03, ease: [0.2, 0.7, 0.2, 1] },
 })
 
 const Tag = ({ children }: any) => (
@@ -28,6 +28,9 @@ const Head = ({ tag, title, sub }: any) => (
 
 const safeCaseStudyUrl = (value: unknown): value is string =>
   typeof value === 'string' && ((value.startsWith('/') && !value.startsWith('//')) || /^https?:\/\//i.test(value))
+
+const isVideoAsset = (value: unknown, mediaType?: unknown) =>
+  mediaType === 'video' || (typeof value === 'string' && /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(value))
 
 const matchesService = (category: unknown, title: unknown) => {
   const c = String(category || '').trim().toLowerCase()
@@ -310,35 +313,44 @@ function ProjectCard({ p, index = 0, onStartProject }: { p: any; index?: number;
   return (
     <motion.article {...rv(index)} className="group card flex flex-col justify-between overflow-hidden">
       <div>
-        <div
-          className="relative h-48 overflow-hidden sm:h-56"
-          style={{ background: `linear-gradient(135deg,hsl(${((index * 65 + 240) % 360)} 70% 30%),#07080c)` }}
-        >
-          {p.image && <img src={media(p.image)} alt={p.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />}
-          <span className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-xs backdrop-blur border border-white/10 font-medium">
-            {p.category}
-          </span>
-        </div>
+        <Link to={`/work/${encodeURIComponent(String(p.id))}`} aria-label={`View details for ${p.title}`}>
+          <div
+            className="relative h-48 overflow-hidden sm:h-56"
+            style={{ background: `linear-gradient(135deg,hsl(${((index * 65 + 240) % 360)} 70% 30%),#07080c)` }}
+          >
+            {p.image && (isVideoAsset(p.image, p.imageType)
+              ? <video src={media(p.image)} aria-label={p.title} muted playsInline preload="metadata" className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+              : <img src={media(p.image)} alt={p.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />)}
+            <span className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-xs backdrop-blur border border-white/10 font-medium">
+              {p.category}
+            </span>
+          </div>
+        </Link>
         <div className="p-5 sm:p-6">
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
-            <h3 className="font-display text-xl font-semibold sm:text-2xl">{p.title}</h3>
+            <h3 className="font-display text-xl font-semibold sm:text-2xl">
+              <Link to={`/work/${encodeURIComponent(String(p.id))}`} className="hover:text-lime transition-colors">
+                {p.title}
+              </Link>
+            </h3>
             {p.result && <span className="max-w-full break-words rounded-full bg-lime/15 px-3 py-1 text-xs font-semibold text-lime">{p.result}</span>}
           </div>
           <p className="mt-2 text-sm text-white/60 leading-relaxed">{p.description}</p>
         </div>
       </div>
       <div className="px-5 pb-5 sm:px-6 sm:pb-6 flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/5">
-        {safeCaseStudyUrl(p.caseStudyUrl) ? (
+        <Link to={`/work/${encodeURIComponent(String(p.id))}`} className="text-sm text-lime transition hover:translate-x-1">
+          View work details →
+        </Link>
+        {safeCaseStudyUrl(p.caseStudyUrl) && (
           <a
             href={p.caseStudyUrl}
             target={p.caseStudyUrl.startsWith('/') ? undefined : '_blank'}
             rel="noopener noreferrer"
-            className="text-sm text-lime transition hover:translate-x-1"
+            className="text-xs text-white/60 transition hover:text-lime"
           >
-            Read case study →
+            Read case study ↗
           </a>
-        ) : (
-          <span />
         )}
         {onStartProject && (
           <button
@@ -351,6 +363,78 @@ function ProjectCard({ p, index = 0, onStartProject }: { p: any; index?: number;
         )}
       </div>
     </motion.article>
+  )
+}
+
+function ProjectDetailPage({ project, onStartProject }: { project?: any; onStartProject: (serviceTitle?: string) => void }) {
+  if (!project) {
+    return (
+      <main className="mx-auto max-w-4xl px-4 pb-20 pt-32 text-center">
+        <Tag>Portfolio</Tag>
+        <h1 className="mt-5 font-display text-4xl font-bold">Work not found</h1>
+        <p className="mt-3 text-white/60">This project may no longer be published.</p>
+        <Link to="/work" className="btn-p mt-6 inline-flex">Back to works</Link>
+      </main>
+    )
+  }
+
+  return (
+    <main className="mx-auto max-w-5xl space-y-8 px-4 pb-20 pt-28 sm:px-6">
+      <Link to="/work" className="btn-g inline-flex !px-4 !py-2 text-xs">← Back to works</Link>
+      {project.image && (
+        <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
+          {isVideoAsset(project.image, project.imageType)
+            ? <video src={media(project.image)} controls playsInline preload="metadata" className="max-h-[560px] w-full bg-black" />
+            : <img
+                src={media(project.image)}
+                alt={project.title}
+                fetchPriority="high"
+                decoding="async"
+                className="max-h-[560px] w-full object-cover"
+              />}
+        </div>
+      )}
+      <article className="card space-y-6 p-6 sm:p-10">
+        <div>
+          {project.category && <Tag>{project.category}</Tag>}
+          <h1 className="mt-5 font-display text-4xl font-bold sm:text-5xl">{project.title}</h1>
+          {project.result && (
+            <p className="mt-4 inline-flex rounded-full bg-lime/15 px-4 py-2 text-sm font-semibold text-lime">{project.result}</p>
+          )}
+        </div>
+        {project.description && (
+          <section>
+            <h2 className="font-display text-xl font-semibold">Project details</h2>
+            <p className="mt-3 whitespace-pre-line leading-relaxed text-white/70">{project.description}</p>
+          </section>
+        )}
+        {project.attachment && (
+          <a
+            href={media(project.attachment)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex text-lime underline underline-offset-4"
+          >
+            View or download {project.attachmentName || 'project file'} ↗
+          </a>
+        )}
+        <div className="flex flex-wrap gap-3 border-t border-white/10 pt-6">
+          {safeCaseStudyUrl(project.caseStudyUrl) && (
+            <a
+              href={project.caseStudyUrl}
+              target={project.caseStudyUrl.startsWith('/') ? undefined : '_blank'}
+              rel="noopener noreferrer"
+              className="btn-g"
+            >
+              Read case study ↗
+            </a>
+          )}
+          <button type="button" onClick={() => onStartProject(project.category)} className="btn-p">
+            Start a similar project →
+          </button>
+        </div>
+      </article>
+    </main>
   )
 }
 
@@ -1137,17 +1221,17 @@ function HomePage({
                   key={i}
                   initial={{ opacity: 0, y: 40, filter: 'blur(8px)' }}
                   animate={{ opacity: 1, y: 0, filter: 'blur(0)' }}
-                  transition={{ delay: 0.2 + i * 0.07, duration: 0.6 }}
+                  transition={{ delay: i * 0.025, duration: 0.3 }}
                   className={`mr-3 inline-block ${i > words.length - 3 ? 'grad' : ''}`}
                 >
                   {w}
                 </motion.span>
               ))}
             </h1>
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }} className="mt-6 max-w-lg text-lg text-white/60">
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.12, duration: 0.25 }} className="mt-6 max-w-lg text-lg text-white/60">
               {c.heroSub}
             </motion.p>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }} className="mt-9 flex flex-wrap gap-4">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.25 }} className="mt-9 flex flex-wrap gap-4">
               <button
                 type="button"
                 onClick={() => onStartProject()}
@@ -1162,7 +1246,7 @@ function HomePage({
               )}
             </motion.div>
           </div>
-          <motion.div initial={{ opacity: 0, scale: 0.9, rotate: 3 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ delay: 0.5, duration: 0.9 }} className="relative animate-float">
+          <motion.div initial={{ opacity: 0, scale: 0.95, rotate: 2 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ delay: 0.1, duration: 0.4 }} className="relative animate-float">
             <div className="card space-y-4 bg-panel/80 p-6 shadow-2xl shadow-brand/20">
               <div className="flex gap-1.5">
                 <i className="h-3 w-3 rounded-full bg-red-400" />
@@ -1351,6 +1435,7 @@ export default function Public() {
 
   const location = useLocation()
   const currentPath = location.pathname
+  const { projectId } = useParams()
 
   const loadPublic = useCallback(() => {
     setLoadError('')
@@ -1512,7 +1597,12 @@ export default function Public() {
       />
 
       <main className="flex-1">
-        {currentPath.startsWith('/services') ? (
+        {projectId ? (
+          <ProjectDetailPage
+            project={d.projects.find((project: any) => String(project.id) === projectId)}
+            onStartProject={openQuoteModal}
+          />
+        ) : currentPath.startsWith('/services') ? (
           <ServicesPage d={d} onStartProject={openQuoteModal} />
         ) : currentPath.startsWith('/work') ? (
           <WorksPage d={d} onStartProject={openQuoteModal} />

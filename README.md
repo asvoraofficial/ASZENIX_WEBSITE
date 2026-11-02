@@ -16,6 +16,12 @@ Edit `backend/.env` before starting the server. Set a unique `JWT_SECRET` (at le
 
 The backend uses MongoDB at `mongodb://localhost:27017/` by default and stores portfolio data in the `asvora` database. Configure `MONGODB_URI` and `MONGO_DB_NAME` in `backend/.env` to use a different MongoDB server or database. Ensure MongoDB is running before starting the backend. On first startup, existing records in `backend/data.json` are migrated into MongoDB; the JSON file is retained as a backup. Analytics continue to use SQLite in `backend/analytics.sqlite3`.
 
+### Persistent media uploads
+
+Admin media uploads support PNG, JPG/JPEG, WebP, SVG, GIF, MP4, WebM, MOV, PDF, DOCX, XLSX, and PPTX files up to 50 MB. The backend checks the extension and file signature/container before accepting uploads. Images and videos can be selected as project media; videos play on the project detail page. Documents can be attached to a project and opened/downloaded from its public detail page.
+
+Uploads are public to anyone who has the file URL; do not upload private or sensitive documents. For uploads that must survive Render restarts and deploys, create a Cloudinary Free account and set its `CLOUDINARY_URL` as a secret environment variable in Render (and optionally in the untracked `backend/.env` for local development). Do not commit or share this value. The Free plan has monthly usage limits; check Cloudinary's current plan and usage dashboard, and do not upgrade to a paid plan if you want to remain free. When `CLOUDINARY_URL` is unset, local uploads continue to use `backend/uploads` and are not persistent on Render Free. Existing local media records are not automatically migrated.
+
 ```powershell
 uvicorn main:app --reload
 ```

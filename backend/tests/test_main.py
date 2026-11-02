@@ -1,10 +1,12 @@
 import asyncio
 import datetime as dt
+import io
 import json
 import os
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -255,6 +257,83 @@ class PortfolioPersistenceTests(unittest.TestCase):
         self.assertEqual(error.exception.status_code, 429)
         self.assertGreaterEqual(int(error.exception.headers["Retry-After"]), 1)
         self.assertLessEqual(int(error.exception.headers["Retry-After"]), 900)
+
+
+class MediaStorageTests(unittest.TestCase):
+    def test_local_uploads_remain_supported_without_cloudinary_configuration(self):
+        with tempfile.TemporaryDirectory() as upload_dir:
+            with patch.object(main, "UPLOADS_DIR", upload_dir):
+                with patch.dict(os.environ, {"CLOUDINARY_URL": ""}):
+                    stored = main.store_media_file(b"image bytes", "image.png")
+
+            self.assertEqual(stored["url"], "/uploads/image.png")
+            self.assertEqual(stored["storage"], "local")
+            self.assertEqual(Path(upload_dir, "image.png").read_bytes(), b"image bytes")
+
+    def test_cloudinary_upload_saves_secure_url_and_asset_id(self):
+        with patch.dict(os.environ, {"CLOUDINARY_URL": "cloudinary://test:test@aszenix"}):
+            with patch.object(
+                main.cloudinary.uploader,
+                "upload",
+                return_value={
+                    "secure_url": "https://res.cloudinary.com/aszenix/image/upload/image.png",
+                    "public_id": "aszenix/image",
+                },
+            ) as upload:
+                stored = main.store_media_file(b"image bytes", "image.png")
+
+        self.assertEqual(stored["url"], "https://res.cloudinary.com/aszenix/image/upload/image.png")
+        self.assertEqual(stored["storage"], "cloudinary")
+        self.assertEqual(stored["public_id"], "aszenix/image")
+        upload.assert_called_once()
+        self.assertEqual(upload.call_args.args[0].read(), b"image bytes")
+
+    def test_cloudinary_delete_requires_success_confirmation(self):
+        with patch.object(
+            main.cloudinary.uploader,
+            "destroy",
+            return_value={"result": "ok"},
+        ) as destroy:
+            main.delete_media_file({"storage": "cloudinary", "public_id": "aszenix/image"})
+
+        destroy.assert_called_once_with("aszenix/image", resource_type="image", invalidate=True)
+        with patch.object(main.cloudinary.uploader, "destroy", return_value={"result": "error"}):
+            with self.assertRaises(RuntimeError):
+                main.delete_media_file({"storage": "cloudinary", "public_id": "aszenix/image"})
+
+    def test_upload_validation_allows_supported_images_videos_and_documents(self):
+        samples = {
+            "photo.png": b"\x89PNG\r\n\x1a\ncontent",
+            "video.mp4": b"\x00\x00\x00\x18ftypisomcontent",
+            "manual.pdf": b"%PDF-1.7 content",
+        }
+        for filename, data in samples.items():
+            with self.subTest(filename=filename):
+                media_type, mime_type = main.validate_media_upload(filename, data)
+                self.assertTrue(media_type)
+                self.assertTrue(mime_type)
+
+        office_data = io.BytesIO()
+        with zipfile.ZipFile(office_data, "w") as archive:
+            archive.writestr("word/document.xml", "<document/>")
+        self.assertEqual(
+            main.validate_media_upload("manual.docx", office_data.getvalue())[0],
+            "file",
+        )
+
+    def test_upload_validation_rejects_spoofed_types_and_oversized_files(self):
+        with self.assertRaises(main.HTTPException) as error:
+            main.validate_media_upload("image.png", b"not actually a png")
+        self.assertEqual(error.exception.status_code, 400)
+
+        with self.assertRaises(main.HTTPException) as error:
+            main.validate_media_upload("program.exe", b"binary")
+        self.assertEqual(error.exception.status_code, 400)
+
+        with patch.object(main, "MAX_MEDIA_UPLOAD_BYTES", 4):
+            with self.assertRaises(main.HTTPException) as error:
+                main.validate_media_upload("file.pdf", b"%PDF-")
+        self.assertEqual(error.exception.status_code, 400)
 
 
 if __name__ == "__main__":

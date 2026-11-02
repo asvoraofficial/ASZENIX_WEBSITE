@@ -3,10 +3,18 @@ import { motion } from 'framer-motion'
 import { api, browserOnlyDemo, tok, media } from './api'
 import BrandLogo from './BrandLogo'
 
-type F = { k: string; l: string; t?: 'area' | 'bool' | 'num' | 'img' }
+type F = { k: string; l: string; t?: 'area' | 'bool' | 'num' | 'media' | 'file' }
+const MEDIA_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,image/gif,video/mp4,video/webm,video/quicktime,.pdf,.docx,.xlsx,.pptx'
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+const MEDIA_TYPES: Record<string, string> = {
+  png: 'image', jpg: 'image', jpeg: 'image', webp: 'image', svg: 'image', gif: 'image',
+  mp4: 'video', webm: 'video', mov: 'video', pdf: 'file', docx: 'file', xlsx: 'file', pptx: 'file',
+}
+const mediaType = (item: any): string =>
+  item.media_type || MEDIA_TYPES[String(item.file || item.url || '').split('.').pop()?.split('?')[0]?.toLowerCase() || ''] || 'file'
 const CFG: Record<string, { title: string; f: F[]; status?: string[]; ro?: boolean }> = {
   services: { title: 'Services', f: [{ k: 'icon', l: 'Icon (emoji/symbol)' }, { k: 'title', l: 'Title' }, { k: 'description', l: 'Description', t: 'area' }, { k: 'published', l: 'Published', t: 'bool' }] },
-  projects: { title: 'Works', f: [{ k: 'title', l: 'Title' }, { k: 'category', l: 'Category' }, { k: 'result', l: 'Key result' }, { k: 'description', l: 'Description', t: 'area' }, { k: 'caseStudyUrl', l: 'Case study URL (optional)' }, { k: 'image', l: 'Image URL (pick from Media)', t: 'img' }, { k: 'published', l: 'Published', t: 'bool' }] },
+  projects: { title: 'Works', f: [{ k: 'title', l: 'Title' }, { k: 'category', l: 'Category' }, { k: 'result', l: 'Key result' }, { k: 'description', l: 'Description', t: 'area' }, { k: 'caseStudyUrl', l: 'Case study URL (optional)' }, { k: 'image', l: 'Image or video (pick from Media)', t: 'media' }, { k: 'attachment', l: 'Document attachment (optional)', t: 'file' }, { k: 'published', l: 'Published', t: 'bool' }] },
   testimonials: { title: 'Testimonials', f: [{ k: 'name', l: 'Name' }, { k: 'role', l: 'Role / company' }, { k: 'quote', l: 'Quote', t: 'area' }, { k: 'rating', l: 'Rating (1-5)', t: 'num' }, { k: 'published', l: 'Published', t: 'bool' }] },
   enquiries: { title: 'Enquiries', ro: true, status: ['new', 'in-progress', 'closed'], f: [] },
   quotes: { title: 'Quote requests', ro: true, status: ['new', 'in-progress', 'quoted', 'closed'], f: [] },
@@ -377,6 +385,29 @@ function Manager({ col, onNavigate }: { col: string; onNavigate?: (col: string) 
     try { await api(`/admin/${col}/${r.id}`, { method: 'PUT', body: { status } }); await load() }
     catch (x: any) { setError(x.message || 'Could not update this status.') }
   }
+  const uploadMedia = async (file: File, field: 'image' | 'attachment') => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError('Files must be 50 MB or smaller.')
+      return
+    }
+    const form = new FormData()
+    form.append('file', file)
+    setUploadingImage(true)
+    setError('')
+    try {
+      const uploaded = await api('/admin/media/upload', { method: 'POST', body: form })
+      setM(current => [uploaded, ...current.filter(item => item.id !== uploaded.id)])
+      setEd((current: any) => ({
+        ...current,
+        [field]: uploaded.url,
+        ...(field === 'image' ? { imageType: uploaded.media_type } : { attachmentName: uploaded.title }),
+      }))
+    } catch (x: any) {
+      setError(x.message || 'Could not upload this file.')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
   return <div><div className="mb-5 flex flex-wrap gap-3"><input className="inp max-w-xs" placeholder="Search…" value={q} onChange={e => setQ(e.target.value)} />
     {cfg.status && <select className="inp max-w-[180px] bg-panel text-white cursor-pointer" value={sf} onChange={e => setSf(e.target.value)}><option value="" className="bg-panel text-white">All statuses</option>{cfg.status.map(s => <option key={s} value={s} className="bg-panel text-white">{s}</option>)}</select>}
     {!cfg.ro && <button className="btn-p ml-auto" onClick={() => { api('/admin/media').then(setM).catch((x: any) => setError(x.message)); setEd({ published: true }) }}>+ Add</button>}</div>
@@ -395,33 +426,37 @@ function Manager({ col, onNavigate }: { col: string; onNavigate?: (col: string) 
       {cfg.f.map(f => <div key={f.k} className="block text-sm"><span className="text-white/60">{f.l}</span>
         {f.t === 'bool' ? <input type="checkbox" className="ml-3" checked={ed[f.k] !== false} onChange={e => setEd({ ...ed, [f.k]: e.target.checked })} />
           : f.t === 'area' ? <textarea rows={3} className="inp mt-1" value={ed[f.k] || ''} onChange={e => setEd({ ...ed, [f.k]: e.target.value })} />
-          : f.t === 'img' ? <div className="mt-1 space-y-3">
+          : f.t === 'media' || f.t === 'file' ? <div className="mt-1 space-y-3">
             <input type="text" className="inp" value={ed[f.k] ?? ''} onChange={e => setEd({ ...ed, [f.k]: e.target.value })} />
             <label className={`btn-g inline-flex cursor-pointer items-center ${uploadingImage ? 'pointer-events-none opacity-50' : ''}`}>
-              {uploadingImage ? 'Uploading…' : 'Upload image'}
-              <input type="file" hidden accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" disabled={uploadingImage} onChange={async e => {
+              {uploadingImage ? 'Uploading…' : f.t === 'media' ? 'Upload image or video' : 'Upload document'}
+              <input type="file" hidden accept={f.t === 'media' ? MEDIA_ACCEPT : '.pdf,.docx,.xlsx,.pptx'} disabled={uploadingImage} onChange={e => {
                 const file = e.currentTarget.files?.[0]
                 e.currentTarget.value = ''
                 if (!file) return
-                const form = new FormData()
-                form.append('file', file)
-                setUploadingImage(true)
-                setError('')
-                try {
-                  const uploaded = await api('/admin/media/upload', { method: 'POST', body: form })
-                  setEd((current: any) => ({ ...current, image: uploaded.url }))
-                  setM(current => [uploaded, ...current.filter(item => item.id !== uploaded.id)])
-                } catch (x: any) {
-                  setError(x.message || 'Could not upload the image.')
-                } finally {
-                  setUploadingImage(false)
-                }
+                void uploadMedia(file, f.t === 'media' ? 'image' : 'attachment')
               }} />
             </label>
-            {ed[f.k] && <img src={media(ed[f.k])} alt="Selected work" loading="lazy" decoding="async" className="h-24 w-36 rounded object-cover" />}
+            {ed[f.k] && f.t === 'media' && (ed.imageType === 'video' || /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(ed[f.k])
+              ? <video src={media(ed[f.k])} controls preload="metadata" className="max-h-40 w-full rounded" />
+              : <img src={media(ed[f.k])} alt="Selected project media" loading="lazy" decoding="async" className="h-24 w-36 rounded object-cover" />)}
+            {ed[f.k] && f.t === 'file' && <a href={media(ed[f.k])} target="_blank" rel="noreferrer" className="block text-lime underline">{ed.attachmentName || 'Open selected document'}</a>}
           </div>
           : <input type={f.t === 'num' ? 'number' : 'text'} className="inp mt-1" value={ed[f.k] ?? ''} onChange={e => setEd({ ...ed, [f.k]: f.t === 'num' ? +e.target.value : e.target.value })} />}
-        {f.t === 'img' && <div className="mt-2 flex flex-wrap gap-2">{media_.map(m => <img key={m.id} src={media(m.url)} alt={m.title || 'Media image'} loading="lazy" decoding="async" onClick={() => setEd({ ...ed, image: m.url })} className={`h-12 w-12 cursor-pointer rounded object-cover ${ed.image === m.url ? 'ring-2 ring-lime' : ''}`} />)}</div>}</div>)}
+        {(f.t === 'media' || f.t === 'file') && <div className="mt-2 flex flex-wrap gap-2">{media_.filter(item => mediaType(item) === (f.t === 'media' ? 'image' : 'file') || (f.t === 'media' && mediaType(item) === 'video')).map(item => (
+          <button key={item.id} type="button" onClick={() => setEd({
+            ...ed,
+            [f.k]: item.url,
+            ...(f.k === 'image' ? { imageType: mediaType(item) } : { attachmentName: item.title }),
+          })} className={`rounded-lg border p-2 text-left text-xs ${ed[f.k] === item.url ? 'border-lime' : 'border-white/10'}`}>
+            {mediaType(item) === 'image'
+              ? <img src={media(item.url)} alt="" loading="lazy" decoding="async" className="h-12 w-16 rounded object-cover" />
+              : mediaType(item) === 'video'
+                ? <video src={media(item.url)} preload="metadata" className="h-12 w-16 rounded object-cover" />
+                : <span className="grid h-12 w-16 place-items-center text-lime">FILE</span>}
+            <span className="block max-w-24 truncate">{item.title || 'Uploaded media'}</span>
+          </button>
+        ))}</div>}</div>)}
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
       <div className="flex justify-end gap-3"><button className="btn-g" onClick={() => setEd(null)}>Cancel</button><button className="btn-p" disabled={uploadingImage} onClick={save}>Save</button></div></motion.div></div>}
     {detailItem && <RequestDetailModal item={detailItem} onClose={() => { setDetailItem(null); load() }} onStatusChange={async (_c, _id, st) => { await setStatus(detailItem, st); setDetailItem((prev: any) => ({ ...prev, status: st, itemStatus: st })) }} onNavigate={onNavigate} />}</div>
@@ -505,9 +540,44 @@ function QuoteSettings() {
 }
 
 function Media() {
-  const [m, setM] = useState<any[]>([]), load = () => api('/admin/media').then(setM); useEffect(() => { load() }, [])
-  return <div><label className="btn-p mb-6 cursor-pointer">Upload image<input type="file" hidden accept="image/*" onChange={async e => { const fd = new FormData(); fd.append('file', e.target.files![0]); try { await api('/admin/media/upload', { method: 'POST', body: fd }); load() } catch (x: any) { alert(x.message) } }} /></label>
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">{m.map(i => <Card key={i.id} className="!p-2"><img src={media(i.url)} alt={i.title || 'Uploaded media'} loading="lazy" decoding="async" className="h-32 w-full rounded-2xl object-cover" /><p className="mt-2 truncate text-xs">{i.title}</p><div className="flex justify-between text-xs"><button className="text-lime" onClick={() => navigator.clipboard.writeText(media(i.url))}>Copy URL</button><button className="text-red-400" onClick={async () => { await api('/admin/media/' + i.id, { method: 'DELETE' }); load() }}>Delete</button></div></Card>)}</div></div>
+  const [m, setM] = useState<any[]>([])
+  const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const load = () => api('/admin/media').then(setM).catch((x: any) => setError(x.message || 'Could not load media.'))
+  useEffect(() => { load() }, [])
+  const upload = async (file?: File) => {
+    if (!file) return
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError('Files must be 50 MB or smaller.')
+      return
+    }
+    const form = new FormData()
+    form.append('file', file)
+    setUploading(true)
+    setError('')
+    try {
+      await api('/admin/media/upload', { method: 'POST', body: form })
+      await load()
+    } catch (x: any) {
+      setError(x.message || 'Could not upload this file.')
+    } finally {
+      setUploading(false)
+    }
+  }
+  return <div>
+    <p className="mb-4 text-sm text-white/50">Images, videos, PDFs, and Office files up to 50 MB. Uploaded files are public to anyone with their URL; do not upload private or sensitive documents.</p>
+    <label className={`btn-p mb-6 cursor-pointer ${uploading ? 'pointer-events-none opacity-50' : ''}`}>{uploading ? 'Uploading…' : 'Upload media or file'}<input type="file" hidden accept={MEDIA_ACCEPT} disabled={uploading} onChange={e => { void upload(e.currentTarget.files?.[0]); e.currentTarget.value = '' }} /></label>
+    {error && <p role="alert" className="mb-4 text-sm text-red-300">{error}</p>}
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">{m.map(item => <Card key={item.id} className="!p-2">
+      {mediaType(item) === 'image'
+        ? <img src={media(item.url)} alt={item.title || 'Uploaded image'} loading="lazy" decoding="async" className="h-32 w-full rounded-2xl object-cover" />
+        : mediaType(item) === 'video'
+          ? <video src={media(item.url)} controls preload="metadata" className="h-32 w-full rounded-2xl object-cover" />
+          : <a href={media(item.url)} target="_blank" rel="noreferrer" className="grid h-32 place-items-center rounded-2xl bg-white/5 text-lime">Open file</a>}
+      <p className="mt-2 truncate text-xs">{item.title}</p>
+      <div className="flex justify-between text-xs"><button className="text-lime" onClick={() => navigator.clipboard.writeText(media(item.url))}>Copy URL</button><button className="text-red-400" onClick={async () => { try { await api('/admin/media/' + item.id, { method: 'DELETE' }); await load() } catch (x: any) { setError(x.message || 'Could not delete this file.') } }}>Delete</button></div>
+    </Card>)}</div>
+  </div>
 }
 
 function Notes({ onNavigate, onUpdateCount }: { onNavigate?: (section: string) => void; onUpdateCount?: () => void }) {
