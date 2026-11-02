@@ -310,10 +310,13 @@ function Counter({ v }: { v: string }) {
 }
 
 function ProjectCard({ p, index = 0, onStartProject }: { p: any; index?: number; onStartProject?: (serviceTitle?: string) => void }) {
+  const location = useLocation()
+  const projectPath = `/work/${encodeURIComponent(String(p.id))}`
+  const returnTo = `${location.pathname}${location.search}`
   return (
     <motion.article {...rv(index)} className="group card flex flex-col justify-between overflow-hidden">
       <div>
-        <Link to={`/work/${encodeURIComponent(String(p.id))}`} aria-label={`View details for ${p.title}`}>
+        <Link to={projectPath} state={{ from: returnTo }} aria-label={`View details for ${p.title}`}>
           <div
             className="relative h-48 overflow-hidden sm:h-56"
             style={{ background: `linear-gradient(135deg,hsl(${((index * 65 + 240) % 360)} 70% 30%),#07080c)` }}
@@ -329,7 +332,7 @@ function ProjectCard({ p, index = 0, onStartProject }: { p: any; index?: number;
         <div className="p-5 sm:p-6">
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
             <h3 className="font-display text-xl font-semibold sm:text-2xl">
-              <Link to={`/work/${encodeURIComponent(String(p.id))}`} className="hover:text-lime transition-colors">
+              <Link to={projectPath} state={{ from: returnTo }} className="hover:text-lime transition-colors">
                 {p.title}
               </Link>
             </h3>
@@ -339,7 +342,7 @@ function ProjectCard({ p, index = 0, onStartProject }: { p: any; index?: number;
         </div>
       </div>
       <div className="px-5 pb-5 sm:px-6 sm:pb-6 flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/5">
-        <Link to={`/work/${encodeURIComponent(String(p.id))}`} className="text-sm text-lime transition hover:translate-x-1">
+        <Link to={projectPath} state={{ from: returnTo }} className="text-sm text-lime transition hover:translate-x-1">
           View work details →
         </Link>
         {safeCaseStudyUrl(p.caseStudyUrl) && (
@@ -366,21 +369,29 @@ function ProjectCard({ p, index = 0, onStartProject }: { p: any; index?: number;
   )
 }
 
-function ProjectDetailPage({ project, onStartProject }: { project?: any; onStartProject: (serviceTitle?: string) => void }) {
+function ProjectDetailPage({
+  project,
+  returnTo,
+  onStartProject,
+}: {
+  project?: any
+  returnTo: string
+  onStartProject: (serviceTitle?: string) => void
+}) {
   if (!project) {
     return (
       <main className="mx-auto max-w-4xl px-4 pb-20 pt-32 text-center">
         <Tag>Portfolio</Tag>
         <h1 className="mt-5 font-display text-4xl font-bold">Work not found</h1>
         <p className="mt-3 text-white/60">This project may no longer be published.</p>
-        <Link to="/work" className="btn-p mt-6 inline-flex">Back to works</Link>
+        <Link to={returnTo} className="btn-p mt-6 inline-flex">Back to works</Link>
       </main>
     )
   }
 
   return (
     <main className="mx-auto max-w-5xl space-y-8 px-4 pb-20 pt-28 sm:px-6">
-      <Link to="/work" className="btn-g inline-flex !px-4 !py-2 text-xs">← Back to works</Link>
+      <Link to={returnTo} className="btn-g inline-flex !px-4 !py-2 text-xs">← Back to works</Link>
       {project.image && (
         <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
           {isVideoAsset(project.image, project.imageType)
@@ -807,8 +818,6 @@ function ServicesPage({ d, onStartProject }: { d: any; onStartProject: (serviceT
   const goBack = () => {
     if (activeService) {
       setFilter('')
-    } else if (window.history.length > 1) {
-      navigate(-1)
     } else {
       navigate('/')
     }
@@ -1020,17 +1029,11 @@ function WorksPage({ d, onStartProject }: { d: any; onStartProject: (serviceTitl
         <div className="mb-6">
           <button
             type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                navigate(-1)
-              } else {
-                navigate('/')
-              }
-            }}
+            onClick={() => navigate('/')}
             className="btn-g !py-2 !px-4 text-xs inline-flex items-center gap-2 hover:border-lime/40 transition cursor-pointer"
-            title="Go back to previous page"
+            title="Back to home"
           >
-            ← Back
+            ← Home
           </button>
         </div>
         <div className="text-center">
@@ -1600,6 +1603,9 @@ export default function Public() {
         {projectId ? (
           <ProjectDetailPage
             project={d.projects.find((project: any) => String(project.id) === projectId)}
+            returnTo={typeof location.state?.from === 'string' && location.state.from.startsWith('/')
+              ? location.state.from
+              : '/work'}
             onStartProject={openQuoteModal}
           />
         ) : currentPath.startsWith('/services') ? (
