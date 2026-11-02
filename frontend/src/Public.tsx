@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, useScroll, useSpring, useTransform, AnimatePresence } from 'framer-motion'
-import { api, media } from './api'
+import { api, getCachedPublicData, invalidatePublicCache, media } from './api'
 import BrandLogo from './BrandLogo'
 
 const rv = (i = 0) => ({
@@ -314,7 +314,7 @@ function ProjectCard({ p, index = 0, onStartProject }: { p: any; index?: number;
           className="relative h-48 overflow-hidden sm:h-56"
           style={{ background: `linear-gradient(135deg,hsl(${((index * 65 + 240) % 360)} 70% 30%),#07080c)` }}
         >
-          {p.image && <img src={media(p.image)} alt={p.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />}
+          {p.image && <img src={media(p.image)} alt={p.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />}
           <span className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-xs backdrop-blur border border-white/10 font-medium">
             {p.category}
           </span>
@@ -1328,7 +1328,7 @@ function HomePage({
 }
 
 export default function Public() {
-  const [d, setD] = useState<any>(null)
+  const [d, setD] = useState<any>(() => getCachedPublicData())
   const [t, setT] = useState(0)
   const [loadError, setLoadError] = useState('')
 
@@ -1357,7 +1357,7 @@ export default function Public() {
     api('/public')
       .then(setD)
       .catch((error: any) => {
-        setD(null)
+        setD(current => current || getCachedPublicData())
         setLoadError(error.message || 'Could not load the portfolio.')
       })
   }, [])
@@ -1369,6 +1369,7 @@ export default function Public() {
     if (typeof BroadcastChannel === 'undefined') return
     const channel = new BroadcastChannel('tp_public_update')
     const refresh = () => {
+      invalidatePublicCache()
       void loadPublic()
     }
     channel.addEventListener('message', refresh)

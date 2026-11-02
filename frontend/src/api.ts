@@ -4,6 +4,10 @@ const DEMO_EMAIL = import.meta.env.VITE_DEMO_ADMIN_EMAIL
 const DEMO_PASSWORD = import.meta.env.VITE_DEMO_ADMIN_PASSWORD
 const DEMO_TOKEN = 'local-browser-demo'
 const DEMO_DATA_KEY = 'tp_demo_data'
+const PUBLIC_CACHE_MS = 30_000
+const PUBLIC_STORAGE_KEY = 'aszenix_public_cache_v1'
+const inFlightGets = new Map<string, Promise<any>>()
+let publicCache: { expiresAt: number; value: any } | null = null
 export const DEFAULT_QUOTE_BUDGETS: string[] = []
 type DemoData = { content: Record<string, string>; [key: string]: any }
 export const browserOnlyDemo = DEMO_MODE
@@ -62,6 +66,18 @@ export const tok = () => {
   return token
 }
 export const media = (u: string) => (u?.startsWith('/uploads') ? B + u : u)
+
+export function getCachedPublicData(): any | null {
+  try {
+    const saved = localStorage.getItem(PUBLIC_STORAGE_KEY)
+    if (!saved) return null
+    const value = JSON.parse(saved)
+    if (!value || typeof value !== 'object' || !value.content || typeof value.content !== 'object') return null
+    return value
+  } catch {
+    return null
+  }
+}
 
 function newDemoData(): DemoData {
   const now = new Date().toISOString()
@@ -328,10 +344,21 @@ async function demoApi(path: string, method: string, body: any) {
 }
 
 function notifyPublicUpdate(path: string, method: string) {
-  if (typeof BroadcastChannel === 'undefined' || !/^\/admin\/(content|services|projects|testimonials)(?:\/|$)/.test(path) || !['POST', 'PUT', 'DELETE'].includes(method)) return
+  if (!/^\/admin\/(content|services|projects|testimonials)(?:\/|$)/.test(path) || !['POST', 'PUT', 'DELETE'].includes(method)) return
+  invalidatePublicCache()
+  if (typeof BroadcastChannel === 'undefined') return
   const channel = new BroadcastChannel('tp_public_update')
   channel.postMessage(null)
   channel.close()
+}
+
+export function invalidatePublicCache() {
+  publicCache = null
+  try {
+    localStorage.removeItem(PUBLIC_STORAGE_KEY)
+  } catch {
+    // Storage may be unavailable; the in-memory cache is still invalidated.
+  }
 }
 
 export async function api(path: string, o: any = {}) {
@@ -342,12 +369,38 @@ export async function api(path: string, o: any = {}) {
     notifyPublicUpdate(path, method)
     return result
   }
-  const r = await fetch(B + '/api' + path, { ...o,
-    headers: { ...(form ? {} : { 'Content-Type': 'application/json' }), ...(tok() ? { Authorization: 'Bearer ' + tok() } : {}) },
-    body: o.body && !form ? JSON.stringify(o.body) : o.body })
-  if (r.status === 401 && path !== '/auth/login') { localStorage.removeItem('tp_token'); location.href = '/admin' }
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Request failed')
-  const result = await r.json()
-  notifyPublicUpdate(path, method)
-  return result
+  const isPublicRequest = method === 'GET' && path.split('?')[0] === '/public'
+  if (isPublicRequest && publicCache && publicCache.expiresAt > Date.now()) return publicCache.value
+
+  const token = tok()
+  const requestKey = method === 'GET' ? `${path}:${token || ''}` : ''
+  const pending = requestKey ? inFlightGets.get(requestKey) : undefined
+  if (pending) return pending
+
+  const request = (async () => {
+    const r = await fetch(B + '/api' + path, { ...o,
+      headers: { ...(form ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: o.body && !form ? JSON.stringify(o.body) : o.body })
+    if (r.status === 401 && path !== '/auth/login') { localStorage.removeItem('tp_token'); location.href = '/admin' }
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Request failed')
+    const result = await r.json()
+    if (isPublicRequest) {
+      publicCache = { expiresAt: Date.now() + PUBLIC_CACHE_MS, value: result }
+      try {
+        localStorage.setItem(PUBLIC_STORAGE_KEY, JSON.stringify(result))
+      } catch {
+        // The live response remains usable when browser storage is unavailable.
+      }
+    }
+    notifyPublicUpdate(path, method)
+    return result
+  })()
+
+  if (!requestKey) return request
+  inFlightGets.set(requestKey, request)
+  try {
+    return await request
+  } finally {
+    if (inFlightGets.get(requestKey) === request) inFlightGets.delete(requestKey)
+  }
 }

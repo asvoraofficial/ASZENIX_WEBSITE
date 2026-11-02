@@ -127,6 +127,14 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 
+@app.middleware("http")
+async def cache_uploaded_media(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/uploads/"):
+        response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
 
 now = lambda: dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 
@@ -159,6 +167,7 @@ def insert(col: str, row: dict):
 
 
 _mongo_available = None
+_store_needs_save = False
 
 
 
@@ -195,7 +204,8 @@ def encode_json(value):
 
 
 def load_store():
-
+    global _store_needs_save
+    _store_needs_save = False
     initialized = None
 
     has_mongo_data = False
@@ -218,7 +228,8 @@ def load_store():
 
 
 
-    if not is_mongo_available() or (not initialized and not has_mongo_data):
+    using_json_backup = not is_mongo_available() or (not initialized and not has_mongo_data)
+    if using_json_backup:
 
         if not os.path.exists(DATA_FILE):
 
@@ -261,25 +272,22 @@ def load_store():
         store[col] = rows
 
     content = next((row for row in store["content"] if row.get("_id") == "site"), None)
-
+    content_changed = False
     if content:
-
         for key, value in CONTENT.items():
-
             if key not in content:
-
                 content[key] = value
-
+                content_changed = True
+    _store_needs_save = content_changed or (
+        is_mongo_available() and using_json_backup and bool(saved)
+    )
     if is_mongo_available() and metadata is not None and (initialized or has_mongo_data):
-        metadata.update_one(
-
-            {"_id": "initialized"},
-
-            {"$set": {"database": MONGO_DB_NAME}},
-
-            upsert=True,
-
-        )
+        if not initialized:
+            metadata.update_one(
+                {"_id": "initialized"},
+                {"$set": {"database": MONGO_DB_NAME}},
+                upsert=True,
+            )
 
     return True
 
@@ -914,17 +922,12 @@ def send_enquiry_email(recipient: str, subject: str, body: str):
 async def seed():
 
     if len(SECRET) < 32:
-
         raise RuntimeError("Set JWT_SECRET to a fixed random value of at least 32 characters.")
-
     if load_store():
-
-        migrate_legacy_content()
-
+        changed = migrate_legacy_content() or _store_needs_save
         init_analytics()
-
-        save_store()
-
+        if changed:
+            await asyncio.to_thread(save_store)
         return
 
     email, password = E("ADMIN_EMAIL"), E("ADMIN_PASSWORD")
@@ -941,7 +944,7 @@ async def seed():
 
         insert("services", {"icon": icon, "title": title, "description": description, "published": True, "created": now()})
 
-    save_store()
+    await asyncio.to_thread(save_store)
 
     init_analytics()
 
@@ -1479,4 +1482,3 @@ async def delete(col: str, id: str, _=Depends(auth)):
         save_store()
 
     return {"ok": True}
-

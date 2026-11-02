@@ -418,10 +418,10 @@ function Manager({ col, onNavigate }: { col: string; onNavigate?: (col: string) 
                 }
               }} />
             </label>
-            {ed[f.k] && <img src={media(ed[f.k])} alt="Selected work" className="h-24 w-36 rounded object-cover" />}
+            {ed[f.k] && <img src={media(ed[f.k])} alt="Selected work" loading="lazy" decoding="async" className="h-24 w-36 rounded object-cover" />}
           </div>
           : <input type={f.t === 'num' ? 'number' : 'text'} className="inp mt-1" value={ed[f.k] ?? ''} onChange={e => setEd({ ...ed, [f.k]: f.t === 'num' ? +e.target.value : e.target.value })} />}
-        {f.t === 'img' && <div className="mt-2 flex flex-wrap gap-2">{media_.map(m => <img key={m.id} src={media(m.url)} alt={m.title || 'Media image'} onClick={() => setEd({ ...ed, image: m.url })} className={`h-12 w-12 cursor-pointer rounded object-cover ${ed.image === m.url ? 'ring-2 ring-lime' : ''}`} />)}</div>}</div>)}
+        {f.t === 'img' && <div className="mt-2 flex flex-wrap gap-2">{media_.map(m => <img key={m.id} src={media(m.url)} alt={m.title || 'Media image'} loading="lazy" decoding="async" onClick={() => setEd({ ...ed, image: m.url })} className={`h-12 w-12 cursor-pointer rounded object-cover ${ed.image === m.url ? 'ring-2 ring-lime' : ''}`} />)}</div>}</div>)}
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
       <div className="flex justify-end gap-3"><button className="btn-g" onClick={() => setEd(null)}>Cancel</button><button className="btn-p" disabled={uploadingImage} onClick={save}>Save</button></div></motion.div></div>}
     {detailItem && <RequestDetailModal item={detailItem} onClose={() => { setDetailItem(null); load() }} onStatusChange={async (_c, _id, st) => { await setStatus(detailItem, st); setDetailItem((prev: any) => ({ ...prev, status: st, itemStatus: st })) }} onNavigate={onNavigate} />}</div>
@@ -507,7 +507,7 @@ function QuoteSettings() {
 function Media() {
   const [m, setM] = useState<any[]>([]), load = () => api('/admin/media').then(setM); useEffect(() => { load() }, [])
   return <div><label className="btn-p mb-6 cursor-pointer">Upload image<input type="file" hidden accept="image/*" onChange={async e => { const fd = new FormData(); fd.append('file', e.target.files![0]); try { await api('/admin/media/upload', { method: 'POST', body: fd }); load() } catch (x: any) { alert(x.message) } }} /></label>
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">{m.map(i => <Card key={i.id} className="!p-2"><img src={media(i.url)} className="h-32 w-full rounded-2xl object-cover" /><p className="mt-2 truncate text-xs">{i.title}</p><div className="flex justify-between text-xs"><button className="text-lime" onClick={() => navigator.clipboard.writeText(media(i.url))}>Copy URL</button><button className="text-red-400" onClick={async () => { await api('/admin/media/' + i.id, { method: 'DELETE' }); load() }}>Delete</button></div></Card>)}</div></div>
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">{m.map(i => <Card key={i.id} className="!p-2"><img src={media(i.url)} alt={i.title || 'Uploaded media'} loading="lazy" decoding="async" className="h-32 w-full rounded-2xl object-cover" /><p className="mt-2 truncate text-xs">{i.title}</p><div className="flex justify-between text-xs"><button className="text-lime" onClick={() => navigator.clipboard.writeText(media(i.url))}>Copy URL</button><button className="text-red-400" onClick={async () => { await api('/admin/media/' + i.id, { method: 'DELETE' }); load() }}>Delete</button></div></Card>)}</div></div>
 }
 
 function Notes({ onNavigate, onUpdateCount }: { onNavigate?: (section: string) => void; onUpdateCount?: () => void }) {
@@ -729,10 +729,11 @@ export default function Admin() {
   }
 
   useEffect(() => {
-    if (ok) {
-      api('/auth/me').then(setMe).catch(() => setOk(false))
-      refreshStats()
-    }
+    if (ok) api('/auth/me').then(setMe).catch(() => setOk(false))
+  }, [ok])
+
+  useEffect(() => {
+    if (ok) refreshStats()
   }, [ok, v])
 
   useEffect(() => {
