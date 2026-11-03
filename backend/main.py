@@ -250,6 +250,14 @@ def store_media_file(data: bytes, filename: str) -> dict:
     }
 
 
+def ensure_media_storage_available() -> None:
+    if E("RENDER", "").lower() == "true" and not E("CLOUDINARY_URL", "").strip():
+        raise HTTPException(
+            503,
+            "Persistent media storage is not configured. Set CLOUDINARY_URL before uploading.",
+        )
+
+
 UPLOAD_TYPES = {
     ".png": ("image", "image/png"),
     ".jpg": ("image", "image/jpeg"),
@@ -1478,6 +1486,8 @@ async def set_content(b: dict, _=Depends(auth)):
 @app.post("/api/admin/media/upload")
 
 async def upload(file: UploadFile = File(...), _=Depends(auth)):
+
+    ensure_media_storage_available()
 
     filename = os.path.basename(file.filename or "")
     data = await file.read(MAX_MEDIA_UPLOAD_BYTES + 1)

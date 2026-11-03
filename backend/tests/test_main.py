@@ -263,12 +263,26 @@ class MediaStorageTests(unittest.TestCase):
     def test_local_uploads_remain_supported_without_cloudinary_configuration(self):
         with tempfile.TemporaryDirectory() as upload_dir:
             with patch.object(main, "UPLOADS_DIR", upload_dir):
-                with patch.dict(os.environ, {"CLOUDINARY_URL": ""}):
+                with patch.dict(os.environ, {"CLOUDINARY_URL": "", "RENDER": ""}):
                     stored = main.store_media_file(b"image bytes", "image.png")
 
             self.assertEqual(stored["url"], "/uploads/image.png")
             self.assertEqual(stored["storage"], "local")
             self.assertEqual(Path(upload_dir, "image.png").read_bytes(), b"image bytes")
+
+    def test_render_upload_requires_persistent_storage_configuration(self):
+        with patch.dict(os.environ, {"CLOUDINARY_URL": "", "RENDER": "true"}):
+            with self.assertRaises(main.HTTPException) as error:
+                main.ensure_media_storage_available()
+
+        self.assertEqual(error.exception.status_code, 503)
+        self.assertIn("CLOUDINARY_URL", error.exception.detail)
+
+        with patch.dict(
+            os.environ,
+            {"CLOUDINARY_URL": "cloudinary://configured", "RENDER": "true"},
+        ):
+            main.ensure_media_storage_available()
 
     def test_cloudinary_upload_saves_secure_url_and_asset_id(self):
         with patch.dict(os.environ, {"CLOUDINARY_URL": "cloudinary://test:test@aszenix"}):
