@@ -260,6 +260,21 @@ class PortfolioPersistenceTests(unittest.TestCase):
 
 
 class MediaStorageTests(unittest.TestCase):
+    def test_newest_projects_are_listed_first_on_public_site_and_admin(self):
+        projects = [
+            {"_id": "old", "title": "Old work", "created": dt.datetime(2025, 1, 1), "published": True},
+            {"_id": "new", "title": "New work", "created": dt.datetime(2025, 2, 1), "published": True},
+        ]
+        with patch.dict(
+            main.store,
+            {"projects": projects, "services": [], "testimonials": []},
+        ), patch.object(main, "find_one", return_value={"_id": "site"}):
+            public_projects = asyncio.run(main.public())["projects"]
+            admin_projects = asyncio.run(main.list_("projects"))
+
+        self.assertEqual([project["title"] for project in public_projects], ["New work", "Old work"])
+        self.assertEqual([project["title"] for project in admin_projects], ["New work", "Old work"])
+
     def test_local_uploads_remain_supported_without_cloudinary_configuration(self):
         with tempfile.TemporaryDirectory() as upload_dir:
             with patch.object(main, "UPLOADS_DIR", upload_dir):

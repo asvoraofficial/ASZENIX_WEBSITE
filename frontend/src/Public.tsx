@@ -89,6 +89,7 @@ function Spot({ children, className = '', onClick }: any) {
 function Nav({ c, hasProjects, hasTestimonials, currentPath, onStartProject }: any) {
   const [s, setS] = useState(false)
   const [o, setO] = useState(false)
+  const [activeSection, setActiveSection] = useState('home')
 
   useEffect(() => {
     const f = () => setS(window.scrollY > 40)
@@ -96,6 +97,41 @@ function Nav({ c, hasProjects, hasTestimonials, currentPath, onStartProject }: a
     window.addEventListener('scroll', f)
     return () => window.removeEventListener('scroll', f)
   }, [])
+
+  useEffect(() => {
+    if (currentPath !== '/') return
+
+    const updateActiveSection = () => {
+      if (window.scrollY <= 20) {
+        setActiveSection('home')
+        return
+      }
+
+      if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) {
+        setActiveSection('contact')
+        return
+      }
+
+      const activeLine = window.scrollY + 140
+      const sectionIds = ['services', 'work', 'about', 'testimonials', 'contact']
+      const currentSection = sectionIds.reduce<HTMLElement | null>((active, id) => {
+        const section = document.getElementById(id)
+        return section && section.getBoundingClientRect().top + window.scrollY <= activeLine
+          ? section
+          : active
+      }, null)
+
+      setActiveSection(currentSection?.id || 'home')
+    }
+
+    updateActiveSection()
+    window.addEventListener('scroll', updateActiveSection, { passive: true })
+    window.addEventListener('resize', updateActiveSection)
+    return () => {
+      window.removeEventListener('scroll', updateActiveSection)
+      window.removeEventListener('resize', updateActiveSection)
+    }
+  }, [currentPath])
 
   // Auto-close menu when path changes
   useEffect(() => {
@@ -134,12 +170,12 @@ function Nav({ c, hasProjects, hasTestimonials, currentPath, onStartProject }: a
   }, [o])
 
   const navItems = [
-    { to: '/', label: 'Home', active: currentPath === '/' },
-    { to: '/services', label: 'Services', active: currentPath.startsWith('/services') },
-    ...(hasProjects ? [{ to: '/work', label: 'Works', active: currentPath.startsWith('/work') }] : []),
-    { to: '/#about', label: 'About', active: false },
-    ...(hasTestimonials ? [{ to: '/#testimonials', label: 'Reviews', active: false }] : []),
-    { to: '/#contact', label: 'Contact', active: false },
+    { to: '/', label: 'Home', active: currentPath === '/' ? activeSection === 'home' : false },
+    { to: '/services', label: 'Services', active: currentPath.startsWith('/services') || (currentPath === '/' && activeSection === 'services') },
+    ...(hasProjects ? [{ to: '/work', label: 'Works', active: currentPath.startsWith('/work') || (currentPath === '/' && activeSection === 'work') }] : []),
+    { to: '/#about', label: 'About', active: currentPath === '/' && activeSection === 'about' },
+    ...(hasTestimonials ? [{ to: '/#testimonials', label: 'Reviews', active: currentPath === '/' && activeSection === 'testimonials' }] : []),
+    { to: '/#contact', label: 'Contact', active: currentPath === '/' && activeSection === 'contact' },
   ]
 
   const handleHashLinkClick = (e: React.MouseEvent, to: string) => {
@@ -1631,23 +1667,10 @@ export default function Public() {
       />
 
       <footer className="border-t border-white/10 px-4 py-10 sm:px-5 sm:py-14 bg-ink/50">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 text-center sm:flex-row sm:text-left">
-          <div>
-            <Link to="/" className="font-display text-2xl font-bold">
-              <BrandLogo logo={media(c.logo)} label={c.brand || 'ASZENIX'} imageClassName="h-10 w-10">{c.brand || 'ASZENIX'}</BrandLogo>
-            </Link>
-            <p className="mt-2 text-sm text-white/50">Digital solutions for your business.</p>
-          </div>
-          <div className="flex flex-wrap justify-center gap-6 text-xs text-white/60">
-            <Link to="/" className="hover:text-lime">Home</Link>
-            <Link to="/services" className="hover:text-lime">Services</Link>
-            <Link to="/work" className="hover:text-lime">Works</Link>
-            <button type="button" onClick={() => openQuoteModal()} className="hover:text-lime">
-              Request a quote
-            </button>
-            <a href="/#about" className="hover:text-lime">About</a>
-            <a href="/#contact" className="hover:text-lime">Contact</a>
-          </div>
+        <div className="mx-auto flex max-w-6xl flex-col items-start gap-3 text-left">
+          <p className="font-display text-2xl font-bold">{c.brand || 'ASZENIX'}</p>
+          {c.phone && <a href={`tel:${c.phone.replace(/[^\d+]/g, '')}`} className="text-sm text-white/60 hover:text-lime">{c.phone}</a>}
+          {c.email && <a href={`mailto:${c.email}`} className="text-sm text-white/60 hover:text-lime">{c.email}</a>}
           <p className="text-xs text-white/40">© {new Date().getFullYear()} {c.brand || 'ASZENIX'}. All rights reserved.</p>
         </div>
       </footer>

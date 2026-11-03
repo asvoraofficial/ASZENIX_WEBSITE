@@ -1219,7 +1219,15 @@ async def public():
 
         **{
 
-            col: [ser(row) for row in sorted(store[col], key=lambda row: row.get("created") or dt.datetime.min) if row.get("published") is not False]
+            col: [
+                ser(row)
+                for row in sorted(
+                    store[col],
+                    key=lambda row: row.get("created") or dt.datetime.min,
+                    reverse=col == "projects",
+                )
+                if row.get("published") is not False
+            ]
 
             for col in ("services", "projects", "testimonials")
 
@@ -1541,7 +1549,7 @@ async def list_(col: str, q: str = "", status: str = "", _=Depends(auth)):
 
         key=lambda row: row.get("created") or dt.datetime.min,
 
-        reverse=col not in ("services", "projects", "testimonials"),
+        reverse=col not in ("services", "testimonials"),
 
     )
 
