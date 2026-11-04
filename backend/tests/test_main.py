@@ -144,6 +144,30 @@ class PortfolioPersistenceTests(unittest.TestCase):
             asyncio.run(main.review(main.ReviewSubmission(name="Visitor", rating=6)))
         self.assertEqual(error.exception.status_code, 422)
 
+        for name in ("123456", "A", "A" * 51):
+            with self.subTest(name=name):
+                with self.assertRaises(main.HTTPException) as error:
+                    asyncio.run(main.review(main.ReviewSubmission(name=name, rating=5)))
+                self.assertEqual(error.exception.status_code, 422)
+
+    def test_intake_rejects_names_without_letters(self):
+        for name in ("123456", "A", "A" * 51):
+            with self.subTest(name=name):
+                with self.assertRaises(main.HTTPException) as error:
+                    asyncio.run(main.intake(
+                        "quotes",
+                        {"name": name, "email": "visitor@example.com"},
+                        "quote request",
+                    ))
+                self.assertEqual(error.exception.status_code, 422)
+
+        asyncio.run(main.intake(
+            "quotes",
+            {"name": "  Alex Smith  ", "email": "visitor@example.com"},
+            "quote request",
+        ))
+        self.assertEqual(main.store["quotes"][0]["name"], "Alex Smith")
+
     def test_persists_and_reloads_portfolio_data_from_mongodb(self):
         if not main.is_mongo_available():
             self.skipTest("MongoDB not available")

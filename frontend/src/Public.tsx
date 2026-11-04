@@ -595,10 +595,20 @@ function QuoteModal({
                     Your Name *
                     <input
                       required
+                      type="text"
                       className="inp mt-1"
                       placeholder="Your name"
                       value={f.name || ''}
-                      onChange={e => setF({ ...f, name: e.target.value })}
+                      onChange={e =>
+                        setF({
+                          ...f,
+                          name: e.target.value.replace(/[^a-zA-Z\s'-]/g, ''),
+                        })
+                      }
+                      minLength={2}
+                      maxLength={50}
+                      pattern="[A-Za-z][A-Za-z\s'-]*"
+                      title="Enter a valid name using letters, spaces, hyphens, or apostrophes."
                     />
                   </label>
                   <label className="block text-xs text-white/60">
@@ -696,7 +706,7 @@ function QuoteModal({
 
 function ContactSection({ d }: { d: any }) {
   const c = d.content
-  const [tab, setTab] = useState<'enquiries' | 'quotes'>('enquiries')
+  const [tab, setTab] = useState<'enquiries' | 'quotes'>('quotes')
   const [f, setF] = useState<any>({})
   const [st, setSt] = useState('')
   const [sending, setSending] = useState(false)
@@ -743,7 +753,7 @@ function ContactSection({ d }: { d: any }) {
       </motion.div>
       <motion.form {...rv(1)} onSubmit={submit} className="card space-y-4 p-5 sm:p-7 shadow-xl shadow-brand/10">
         <div className="flex rounded-full bg-white/5 p-1 text-sm">
-          {(['enquiries', 'quotes'] as const).map(k => (
+          {(['quotes', 'enquiries'] as const).map(k => (
             <button
               type="button"
               key={k}
@@ -1740,10 +1750,16 @@ export default function Public() {
                     Your name
                     <input
                       required
-                      maxLength={120}
+                      type="text"
+                      minLength={2}
+                      maxLength={50}
+                      pattern="[A-Za-z][A-Za-z\s'-]*"
+                      title="Enter a valid name using letters, spaces, hyphens, or apostrophes."
                       className="inp mt-1"
                       value={reviewName}
-                      onChange={event => setReviewName(event.target.value)}
+                      onChange={event =>
+                        setReviewName(event.target.value.replace(/[^a-zA-Z\s'-]/g, ''))
+                      }
                     />
                   </label>
                   <label className="block text-sm text-white/60">

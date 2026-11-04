@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { api, browserOnlyDemo, tok, media } from './api'
 import BrandLogo from './BrandLogo'
@@ -14,7 +14,7 @@ const mediaType = (item: any): string =>
   item.media_type || MEDIA_TYPES[String(item.file || item.url || '').split('.').pop()?.split('?')[0]?.toLowerCase() || ''] || 'file'
 const CFG: Record<string, { title: string; f: F[]; status?: string[]; ro?: boolean }> = {
   services: { title: 'Services', f: [{ k: 'icon', l: 'Icon (emoji/symbol)' }, { k: 'title', l: 'Title' }, { k: 'description', l: 'Description', t: 'area' }, { k: 'published', l: 'Published', t: 'bool' }] },
-  projects: { title: 'Works', f: [{ k: 'title', l: 'Title' }, { k: 'category', l: 'Category' }, { k: 'result', l: 'Key result' }, { k: 'description', l: 'Description', t: 'area' }, { k: 'caseStudyUrl', l: 'Case study URL (optional)' }, { k: 'image', l: 'Image or video (pick from Media)', t: 'media' }, { k: 'attachment', l: 'Document attachment (optional)', t: 'file' }, { k: 'published', l: 'Published', t: 'bool' }] },
+  projects: { title: 'Works', f: [{ k: 'title', l: 'Title' }, { k: 'category', l: 'Category' }, { k: 'result', l: 'Key result' }, { k: 'description', l: 'Description', t: 'area' }, { k: 'caseStudyUrl', l: 'Case study URL (optional)' }, { k: 'image', l: 'Image or video', t: 'media' }, { k: 'attachment', l: 'Document attachment (optional)', t: 'file' }, { k: 'published', l: 'Published', t: 'bool' }] },
   testimonials: { title: 'Testimonials', f: [{ k: 'name', l: 'Name' }, { k: 'role', l: 'Role / company' }, { k: 'quote', l: 'Quote', t: 'area' }, { k: 'rating', l: 'Rating (1-5)', t: 'num' }, { k: 'published', l: 'Published', t: 'bool' }] },
   enquiries: { title: 'Enquiries', ro: true, status: ['new', 'in-progress', 'closed'], f: [] },
   quotes: { title: 'Quote requests', ro: true, status: ['new', 'in-progress', 'quoted', 'closed'], f: [] },
@@ -50,7 +50,7 @@ function Dash() {
   if (!s) return error ? <div><p role="alert" className="text-red-300">{error}</p><button className="btn-g mt-4" onClick={load}>Retry</button></div> : <p>Loading dashboard…</p>
   const max = Math.max(1, ...s.series.map((x: any) => x.n))
   const K = [['Total visits', s.visits], ['Enquiries', s.enquiries], ['Quote requests', s.quotes], ['Awaiting reply', s.new], ['Services', s.services], ['Projects', s.projects]]
-  return <div className="space-y-6"><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{K.map(([k, v], i) => <motion.div key={k} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .05 }}><Card><p className="text-sm text-white/50">{k}</p><b className="font-display text-3xl text-lime">{v}</b></Card></motion.div>)}</div>
+  return <div className="space-y-6"><div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">{K.map(([k, v], i) => <motion.div key={k} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .05 }}><Card><p className="text-sm text-white/50">{k}</p><b className="font-display text-3xl text-lime">{v}</b></Card></motion.div>)}</div>
     <div className="grid gap-6 lg:grid-cols-3"><Card className="lg:col-span-2"><h3 className="mb-4 font-display">Visitors, last 14 days</h3><div className="flex h-48 items-end gap-2">{s.series.map((x: any, i: number) => <div key={x.d} className="group relative flex-1"><motion.div initial={{ height: 0 }} animate={{ height: (x.n / max) * 100 + '%' }} transition={{ delay: i * .04 }} className="min-h-[3px] rounded-t bg-gradient-to-t from-brand to-lime" /><span className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs opacity-0 group-hover:opacity-100">{x.n}</span></div>)}</div>
       <div className="mt-2 flex justify-between text-xs text-white/40"><span>{s.series[0].d}</span><span>{s.series[13].d}</span></div></Card>
       <Card><h3 className="mb-4 font-display">Top pages</h3>{s.top.length ? s.top.map((t: any) => <div key={t.path} className="flex justify-between border-b border-white/5 py-2 text-sm"><span>{t.path}</span><b>{t.n}</b></div>) : <p className="text-sm text-white/40">No traffic yet.</p>}</Card></div></div>
@@ -360,7 +360,7 @@ function RequestDetailModal({
 }
 
 function Manager({ col, onNavigate }: { col: string; onNavigate?: (col: string) => void }) {
-  const cfg = CFG[col], [rows, setRows] = useState<any[]>([]), [q, setQ] = useState(''), [sf, setSf] = useState(''), [ed, setEd] = useState<any>(null), [detailItem, setDetailItem] = useState<any>(null), [media_, setM] = useState<any[]>([]), [error, setError] = useState(''), [loading, setLoading] = useState(true), [uploadingImage, setUploadingImage] = useState(false)
+  const cfg = CFG[col], [rows, setRows] = useState<any[]>([]), [q, setQ] = useState(''), [sf, setSf] = useState(''), [ed, setEd] = useState<any>(null), [detailItem, setDetailItem] = useState<any>(null), [error, setError] = useState(''), [loading, setLoading] = useState(true), [uploadingImage, setUploadingImage] = useState(false)
   const load = async () => {
     setLoading(true)
     try { setRows(await api(`/admin/${col}?q=${encodeURIComponent(q)}&status=${sf}`)); setError('') }
@@ -396,7 +396,6 @@ function Manager({ col, onNavigate }: { col: string; onNavigate?: (col: string) 
     setError('')
     try {
       const uploaded = await api('/admin/media/upload', { method: 'POST', body: form })
-      setM(current => [uploaded, ...current.filter(item => item.id !== uploaded.id)])
       setEd((current: any) => ({
         ...current,
         [field]: uploaded.url,
@@ -410,7 +409,7 @@ function Manager({ col, onNavigate }: { col: string; onNavigate?: (col: string) 
   }
   return <div><div className="mb-5 flex flex-wrap gap-3"><input className="inp max-w-xs" placeholder="Search…" value={q} onChange={e => setQ(e.target.value)} />
     {cfg.status && <select className="inp max-w-[180px] bg-panel text-white cursor-pointer" value={sf} onChange={e => setSf(e.target.value)}><option value="" className="bg-panel text-white">All statuses</option>{cfg.status.map(s => <option key={s} value={s} className="bg-panel text-white">{s}</option>)}</select>}
-    {!cfg.ro && <button className="btn-p ml-auto" onClick={() => { api('/admin/media').then(setM).catch((x: any) => setError(x.message)); setEd({ published: true }) }}>+ Add</button>}</div>
+    {!cfg.ro && <button className="btn-p ml-auto" onClick={() => setEd({ published: true })}>+ Add</button>}</div>
     {error && <p role="alert" className="mb-4 text-sm text-red-300">{error}</p>}
     <div className="space-y-3">{rows.map(r => <Card key={r.id} className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 flex-1">{cfg.ro ? <><b>{r.name}</b> <span className="text-sm text-white/50">{r.email}</span>{r.phone && <span className="ml-2 text-xs text-lime">☎ {r.phone}</span>}{r.service && <p className="text-xs text-lime">{r.service}{r.budget ? ` · ${r.budget}` : ''}</p>}<p className="mt-2 text-sm text-white/70 line-clamp-2">{r.message}</p><p className="mt-1 text-xs text-white/30">{new Date(r.created).toLocaleString()}</p></>
@@ -418,7 +417,7 @@ function Manager({ col, onNavigate }: { col: string; onNavigate?: (col: string) 
       <div className="flex items-center gap-2">{cfg.ro ? <>
         <button className="btn-p !py-2 text-xs" onClick={() => setDetailItem({ ...r, type: col })}>View Details</button>
         <select className="inp !w-auto !py-2 bg-panel text-white cursor-pointer text-xs" value={r.status} onChange={e => setStatus(r, e.target.value)}>{cfg.status!.map(s => <option key={s} value={s} className="bg-panel text-white capitalize">{s}</option>)}</select>
-      </> : <button className="btn-g !py-2" onClick={() => { api('/admin/media').then(setM).catch((x: any) => setError(x.message)); setEd(r) }}>Edit</button>}<button className="btn-g !py-2 text-red-400" onClick={() => del(r.id)}>Delete</button></div></Card>)}
+      </> : <button className="btn-g !py-2" onClick={() => setEd(r)}>Edit</button>}<button className="btn-g !py-2 text-red-400" onClick={() => del(r.id)}>Delete</button></div></Card>)}
       {loading && <p className="py-10 text-center text-white/40">Loading…</p>}
       {!loading && !rows.length && !error && <p className="py-10 text-center text-white/40">Nothing here yet.</p>}</div>
     {ed && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-3 backdrop-blur sm:p-4" onClick={() => setEd(null)}><motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} onClick={e => e.stopPropagation()} className="card max-h-[90vh] w-full max-w-lg space-y-4 overflow-auto bg-panel p-5 sm:p-6">
@@ -443,20 +442,7 @@ function Manager({ col, onNavigate }: { col: string; onNavigate?: (col: string) 
             {ed[f.k] && f.t === 'file' && <a href={media(ed[f.k])} target="_blank" rel="noreferrer" className="block text-lime underline">{ed.attachmentName || 'Open selected document'}</a>}
           </div>
           : <input type={f.t === 'num' ? 'number' : 'text'} className="inp mt-1" value={ed[f.k] ?? ''} onChange={e => setEd({ ...ed, [f.k]: f.t === 'num' ? +e.target.value : e.target.value })} />}
-        {(f.t === 'media' || f.t === 'file') && <div className="mt-2 flex flex-wrap gap-2">{media_.filter(item => mediaType(item) === (f.t === 'media' ? 'image' : 'file') || (f.t === 'media' && mediaType(item) === 'video')).map(item => (
-          <button key={item.id} type="button" onClick={() => setEd({
-            ...ed,
-            [f.k]: item.url,
-            ...(f.k === 'image' ? { imageType: mediaType(item) } : { attachmentName: item.title }),
-          })} className={`rounded-lg border p-2 text-left text-xs ${ed[f.k] === item.url ? 'border-lime' : 'border-white/10'}`}>
-            {mediaType(item) === 'image'
-              ? <img src={media(item.url)} alt="" loading="lazy" decoding="async" className="h-12 w-16 rounded object-cover" />
-              : mediaType(item) === 'video'
-                ? <video src={media(item.url)} preload="metadata" className="h-12 w-16 rounded object-cover" />
-                : <span className="grid h-12 w-16 place-items-center text-lime">FILE</span>}
-            <span className="block max-w-24 truncate">{item.title || 'Uploaded media'}</span>
-          </button>
-        ))}</div>}</div>)}
+      </div>)}
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
       <div className="flex justify-end gap-3"><button className="btn-g" onClick={() => setEd(null)}>Cancel</button><button className="btn-p" disabled={uploadingImage} onClick={save}>Save</button></div></motion.div></div>}
     {detailItem && <RequestDetailModal item={detailItem} onClose={() => { setDetailItem(null); load() }} onStatusChange={async (_c, _id, st) => { await setStatus(detailItem, st); setDetailItem((prev: any) => ({ ...prev, status: st, itemStatus: st })) }} onNavigate={onNavigate} />}</div>
@@ -543,8 +529,34 @@ function Media() {
   const [m, setM] = useState<any[]>([])
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [selectedMedia, setSelectedMedia] = useState<any>(null)
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const load = () => api('/admin/media').then(setM).catch((x: any) => setError(x.message || 'Could not load media.'))
   useEffect(() => { load() }, [])
+  useEffect(() => () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current)
+  }, [])
+  const clearPressTimer = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current)
+    pressTimer.current = null
+  }
+  const copyUrl = async (item: any) => {
+    try {
+      await navigator.clipboard.writeText(media(item.url))
+    } catch (x: any) {
+      setError(x.message || 'Could not copy the media URL.')
+    }
+  }
+  const deleteMedia = async (item: any) => {
+    if (!confirm('Delete this media permanently?')) return
+    try {
+      await api('/admin/media/' + item.id, { method: 'DELETE' })
+      setSelectedMedia(null)
+      await load()
+    } catch (x: any) {
+      setError(x.message || 'Could not delete this media.')
+    }
+  }
   const upload = async (file?: File) => {
     if (!file) return
     if (file.size > MAX_UPLOAD_BYTES) {
@@ -568,15 +580,63 @@ function Media() {
     <p className="mb-4 text-sm text-white/50">Images, videos, PDFs, and Office files up to 50 MB. Uploaded files are public to anyone with their URL; do not upload private or sensitive documents.</p>
     <label className={`btn-p mb-6 cursor-pointer ${uploading ? 'pointer-events-none opacity-50' : ''}`}>{uploading ? 'Uploading…' : 'Upload media or file'}<input type="file" hidden accept={MEDIA_ACCEPT} disabled={uploading} onChange={e => { void upload(e.currentTarget.files?.[0]); e.currentTarget.value = '' }} /></label>
     {error && <p role="alert" className="mb-4 text-sm text-red-300">{error}</p>}
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">{m.map(item => <Card key={item.id} className="!p-2">
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">{m.map(item => <div
+      key={item.id}
+      onPointerDown={event => {
+        if (event.pointerType === 'mouse') return
+        clearPressTimer()
+        pressTimer.current = setTimeout(() => setSelectedMedia(item), 500)
+      }}
+      onPointerUp={clearPressTimer}
+      onPointerLeave={clearPressTimer}
+      onPointerCancel={clearPressTimer}
+      onContextMenu={event => {
+        if (window.matchMedia('(max-width: 767px)').matches) {
+          event.preventDefault()
+          clearPressTimer()
+          setSelectedMedia(item)
+        }
+      }}
+    >
+      <Card className="!p-2">
       {mediaType(item) === 'image'
         ? <img src={media(item.url)} alt={item.title || 'Uploaded image'} loading="lazy" decoding="async" className="h-32 w-full rounded-2xl object-cover" />
         : mediaType(item) === 'video'
           ? <video src={media(item.url)} controls preload="metadata" className="h-32 w-full rounded-2xl object-cover" />
           : <a href={media(item.url)} target="_blank" rel="noreferrer" className="grid h-32 place-items-center rounded-2xl bg-white/5 text-lime">Open file</a>}
       <p className="mt-2 truncate text-xs">{item.title}</p>
-      <div className="flex justify-between text-xs"><button className="text-lime" onClick={() => navigator.clipboard.writeText(media(item.url))}>Copy URL</button><button className="text-red-400" onClick={async () => { try { await api('/admin/media/' + item.id, { method: 'DELETE' }); await load() } catch (x: any) { setError(x.message || 'Could not delete this file.') } }}>Delete</button></div>
-    </Card>)}</div>
+      <div className="hidden justify-between text-xs md:flex">
+        <button className="text-lime" onClick={() => { void copyUrl(item) }}>Copy URL</button>
+        <button className="text-red-400" onClick={() => { void deleteMedia(item) }}>Delete</button>
+      </div>
+      </Card>
+    </div>)}</div>
+    {selectedMedia && <div
+      className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
+      onClick={() => setSelectedMedia(null)}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Actions for ${selectedMedia.title || 'media'}`}
+        className="card w-full max-w-sm space-y-2 bg-panel p-4"
+        onClick={event => event.stopPropagation()}
+      >
+        <p className="truncate px-2 pb-2 text-sm text-white/60">{selectedMedia.title || 'Media actions'}</p>
+        <a href={media(selectedMedia.url)} target="_blank" rel="noreferrer" className="btn-g w-full !rounded-xl">
+          Open / preview
+        </a>
+        <button className="btn-g w-full !rounded-xl" onClick={() => { void copyUrl(selectedMedia) }}>
+          Copy URL
+        </button>
+        <button className="btn-g w-full !rounded-xl !text-red-400" onClick={() => { void deleteMedia(selectedMedia) }}>
+          Delete media
+        </button>
+        <button className="w-full rounded-xl py-2 text-sm text-white/60" onClick={() => setSelectedMedia(null)}>
+          Cancel
+        </button>
+      </div>
+    </div>}
   </div>
 }
 
@@ -791,6 +851,7 @@ export default function Admin() {
   const [logo, setLogo] = useState('')
   const [unread, setU] = useState(0)
   const [adminError, setAdminError] = useState('')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => { localStorage.setItem('tp_admin_section', v) }, [v])
 
@@ -814,33 +875,64 @@ export default function Admin() {
     if (!ok) api('/public').then(data => setLogo(data.content.logo || '')).catch((x: any) => setAdminError(x.message || 'Could not load the site logo.'))
   }, [ok])
 
+  const navigateTo = (section: string) => {
+    setV(section)
+    setMobileNavOpen(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   if (!ok) return <Login ok={() => setOk(true)} logo={logo} error={adminError} />
   if (!me) return <p className="p-8">{adminError || 'Loading admin…'}</p>
 
   const renderContent = () => (
     v === 'dashboard' ? <Dash />
-    : CFG[v] ? <Manager col={v} onNavigate={setV} />
+    : CFG[v] ? <Manager col={v} onNavigate={navigateTo} />
     : v === 'about' || v === 'contact' ? <SectionEditor section={v} />
     : v === 'content' ? <Content />
     : v === 'quote-settings' ? <QuoteSettings />
     : v === 'media' ? <Media />
-    : v === 'notifications' ? <Notes onNavigate={setV} onUpdateCount={refreshStats} />
+    : v === 'notifications' ? <Notes onNavigate={navigateTo} onUpdateCount={refreshStats} />
     : <Profile me={me} logo={logo} onSaved={setMe} onLogoSaved={setLogo} />
   )
 
   return (
-    <div className="flex min-h-screen bg-ink">
+    <div className="flex min-h-screen flex-col bg-ink md:flex-row">
       {/* Desktop Sticky Sidebar */}
-      <aside className="sticky top-0 h-screen max-h-screen w-64 border-r border-white/10 bg-panel p-4 sm:p-5 flex flex-col shrink-0">
-        <div className="shrink-0 mb-6 flex items-center justify-between">
-          <a href="/" className="font-display text-xl font-bold"><BrandLogo logo={media(logo)} label="ASZENIX" imageClassName="h-8 w-8">AS<span className="text-lime">ZENIX</span> <span className="text-xs text-white/40">admin</span></BrandLogo></a>
-          <a href="/" target="_blank" rel="noopener noreferrer" className="rounded-lg bg-white/5 px-2 py-1 text-xs text-white/50 hover:bg-white/10 hover:text-lime transition" title="Open public site">↗ Site</a>
+      <aside className="sticky top-0 z-40 flex w-full shrink-0 flex-col border-b border-white/10 bg-panel p-3 sm:p-4 md:h-screen md:max-h-screen md:w-64 md:border-b-0 md:border-r md:p-5">
+        <div className="mb-3 flex shrink-0 items-center justify-between md:mb-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-lg text-white/80 hover:bg-white/10 md:hidden"
+              aria-label={mobileNavOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileNavOpen}
+              aria-controls="admin-navigation"
+              onClick={() => setMobileNavOpen(open => !open)}
+            >
+              {mobileNavOpen ? '×' : '☰'}
+            </button>
+            <a href="/" className="font-display text-lg font-bold sm:text-xl"><BrandLogo logo={media(logo)} label="ASZENIX" imageClassName="h-8 w-8">AS<span className="text-lime">ZENIX</span> <span className="text-xs text-white/40">admin</span></BrandLogo></a>
+          </div>
+          <div className="flex items-center gap-2">
+            <a href="/" target="_blank" rel="noopener noreferrer" className="rounded-lg bg-white/5 px-2 py-1 text-xs text-white/50 hover:bg-white/10 hover:text-lime transition" title="Open public site">↗ Site</a>
+          </div>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain pr-1 scrollbar-thin">
+        {mobileNavOpen && (
+          <button
+            type="button"
+            aria-label="Close navigation menu"
+            className="fixed inset-0 z-50 bg-black/60 md:hidden"
+            onClick={() => setMobileNavOpen(false)}
+          />
+        )}
+        <nav
+          id="admin-navigation"
+          className={`${mobileNavOpen ? 'flex' : 'hidden'} fixed inset-y-0 left-0 z-[60] w-72 max-w-[85vw] flex-col gap-1 overflow-y-auto overscroll-contain border-r border-white/10 bg-panel px-3 pb-4 pt-20 shadow-2xl scrollbar-thin md:static md:z-auto md:flex md:h-auto md:max-h-none md:w-auto md:max-w-none md:flex-1 md:overflow-y-auto md:border-0 md:bg-transparent md:px-0 md:py-0 md:pr-1 md:shadow-none`}
+        >
           {NAV.map(([k, l]) => (
             <button
               key={k}
-              onClick={() => { setV(k); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+              onClick={() => navigateTo(k)}
               className={`flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-left text-sm transition ${v === k ? 'bg-brand/20 text-lime font-medium' : 'text-white/60 hover:bg-white/5'}`}
             >
               {l}
@@ -849,12 +941,12 @@ export default function Admin() {
               )}
             </button>
           ))}
-          <button className="mt-6 w-full rounded-xl px-4 py-2.5 text-left text-sm text-red-400 hover:bg-white/5" onClick={() => { localStorage.removeItem('tp_token'); setOk(false) }}>⏻ Logout</button>
+          <button className="mt-2 w-full rounded-xl px-4 py-2.5 text-left text-sm text-red-400 hover:bg-white/5 md:mt-6" onClick={() => { localStorage.removeItem('tp_token'); setMobileNavOpen(false); setOk(false) }}>⏻ Logout</button>
         </nav>
       </aside>
 
       {/* Main Content Workspace */}
-      <main className="min-w-0 flex-1 p-6 md:p-10">
+      <main className="min-w-0 flex-1 p-3 sm:p-5 md:p-10">
         {/* Top Header Bar */}
         <div className="mb-6 flex items-center justify-between gap-3 sm:mb-8 border-b border-white/5 pb-4">
           <h1 className="min-w-0 truncate font-display text-2xl font-bold capitalize sm:text-3xl">

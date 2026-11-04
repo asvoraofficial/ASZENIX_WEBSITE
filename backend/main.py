@@ -1263,7 +1263,15 @@ async def intake(col: str, b: dict, label: str):
 
     b = {k: str(v)[:3000] for k, v in b.items() if k in ("name", "email", "phone", "message", "service", "budget")}
 
-    if not b.get("name") or not b.get("email") or "@" not in b["email"]:
+    name = b.get("name", "").strip()
+
+    if not re.fullmatch(r"[A-Za-z][A-Za-z\s'-]{1,49}", name):
+
+        raise HTTPException(422, "Enter a valid name using 2 to 50 letters, spaces, hyphens, or apostrophes.")
+
+    b["name"] = name
+
+    if not b.get("email") or "@" not in b["email"]:
 
         raise HTTPException(422, "Name and valid email required")
 
@@ -1347,9 +1355,9 @@ async def review(b: ReviewSubmission):
 
     name, quote_text = b.name.strip(), b.quote.strip()
 
-    if not name or len(name) > 120:
+    if not re.fullmatch(r"[A-Za-z][A-Za-z\s'-]{1,49}", name):
 
-        raise HTTPException(422, "Name must be between 1 and 120 characters.")
+        raise HTTPException(422, "Enter a valid name using 2 to 50 letters, spaces, hyphens, or apostrophes.")
 
     if b.rating < 1 or b.rating > 5:
 
